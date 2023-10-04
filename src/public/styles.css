@@ -1,0 +1,56 @@
+.fp-tealium-container {
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+
+  & * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    list-style: none;
+  }
+}
+
+.fp-tealium-console {
+  position: sticky;
+  top: 0;
+  width: 500px;
+  height: 100vh;
+  padding: 20px;
+  font-family: monospace;
+  color: #fff;
+  background: #212128;
+
+  & button {
+    border-radius: 30px;
+    border: none;
+    background-color: #eee;
+    padding: 5px 10px;
+    font-size: 14px;
+    display: inline-block;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+
+  & h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  & ul {
+    list-style: none;
+    overflow: auto;
+    max-height: 90vh;
+
+    & li {
+      margin-bottom: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #121212;
+      background-color: #eee;
+      padding: 10px;
+      border-radius: 5px;
+    }
+  }
+}
