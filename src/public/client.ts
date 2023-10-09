@@ -43,6 +43,17 @@
     );
   };
 
+  const fanDataKeys = new Set([
+    'id',
+    'email',
+    'phone_code',
+    'created_at',
+    'username',
+    'last_known_city',
+    'last_known_state',
+    'sms_opt_out',
+  ]);
+
   const getFanData = () => {
     try {
       const cookies = getCookies();
@@ -50,8 +61,8 @@
 
       return Object.fromEntries(
         Object.entries(data)
-          .filter(([, value]) => {
-            return ![null, undefined].includes(value);
+          .filter(([key, value]) => {
+            return fanDataKeys.has(key) && ![null, undefined].includes(value);
           })
           .map(([key, value]) => {
             if (typeof value === 'boolean') {
