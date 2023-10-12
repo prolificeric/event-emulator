@@ -4,6 +4,8 @@ export type Config = ReturnType<typeof parseConfig>;
 
 export const parseConfig = ({
   PORT = '3001',
+  CACHE_FILES = 'false',
+  CACHE_PAGES_TTL = '3600000', // 1 hour
   TEALIUM_BASE_URL = 'https://collect.tealiumiq.com',
   PUPPETEER_PATH = resolve(
     __dirname,
@@ -18,5 +20,11 @@ export const parseConfig = ({
   },
   puppeteer: {
     path: PUPPETEER_PATH,
+  },
+  cache: {
+    files: CACHE_FILES === 'true',
+    pages: {
+      ttl: +CACHE_PAGES_TTL,
+    },
   },
 });

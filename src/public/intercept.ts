@@ -2,37 +2,12 @@
 /// <reference types="web" />
 
 {
-  const $logger = $('.fp-tealium-console ul');
-
   const getPropIdFromElement = ($el: JQuery) => {
     return $el.closest('.pickup-js-prop-picker').data('propid').toString();
   };
 
   const getQuestionFromElement = ($el: JQuery) => {
     return $el.closest('.pickup-js-prop-picker').find('h1:first').text().trim();
-  };
-
-  const deleteAllCookies = () => {
-    var c = document.cookie.split('; ');
-
-    for (let i = 0; i < c.length; i++) {
-      document.cookie =
-        /^[^=]+/.exec(c[i])[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    }
-  };
-
-  const appendLog = (message: any) => {
-    const $message = $('<pre />').text(
-      typeof message === 'object' ? JSON.stringify(message, null, 2) : message,
-    );
-
-    const $item = $('<li class="message" />').append($message);
-
-    $logger.append($item);
-
-    $logger.scrollTop($logger.prop('scrollHeight'));
-
-    return $item;
   };
 
   const getCookies = () => {
@@ -77,27 +52,33 @@
     }
   };
 
-  const baseTealium = {
-    tealium_account: 'fanpower',
-    tealium_profile: 'main',
-    tealium_datasource: 'web',
-    tealium_trace_id: crypto.randomUUID(),
-  };
-
-  const createTealiumEvent = (
-    data: Record<string, string | string[] | undefined>,
-  ) => {
+  const getPageData = () => {
     return {
-      ...baseTealium,
-      ...data,
-      ...getFanData(),
+      page_url: new URL(location.href).searchParams.get('url') || location.href,
+      page_title: document.title,
     };
   };
 
-  $('body').on('click', '.fp-tealium-clear-cookies', async () => {
-    deleteAllCookies();
-    location.reload();
-  });
+  const emit = (
+    type: string,
+    payload: Record<string, string | string[] | undefined>,
+  ) => {
+    const message = {
+      type: 'data-event',
+      event: {
+        type,
+        payload: {
+          ...getFanData(),
+          ...getPageData(),
+          ...payload,
+        },
+      },
+    };
+
+    console.log(message);
+
+    window.parent?.postMessage(message);
+  };
 
   $('body').on(
     'click',
@@ -106,14 +87,11 @@
       const $button = $(event.target);
       const propId = getPropIdFromElement($button);
 
-      appendLog(
-        createTealiumEvent({
-          tealium_event: 'picker_pick_click',
-          prop_id: propId,
-          button_text: $button.attr('title'),
-          question: getQuestionFromElement($button),
-        }),
-      );
+      emit('picker_pick_click', {
+        prop_id: propId,
+        button_text: $button.attr('title'),
+        question: getQuestionFromElement($button),
+      });
     },
   );
 
@@ -124,14 +102,11 @@
       const $button = $(event.target);
       const propId = getPropIdFromElement($button);
 
-      appendLog(
-        createTealiumEvent({
-          tealium_event: 'picker_share_click',
-          prop_id: propId,
-          button_text: $button.attr('title'),
-          question: getQuestionFromElement($button),
-        }),
-      );
+      emit('picker_share_click', {
+        prop_id: propId,
+        button_text: $button.attr('title'),
+        question: getQuestionFromElement($button),
+      });
     },
   );
 
@@ -139,13 +114,10 @@
     const $form = $(event.target);
     const propId = getPropIdFromElement($form);
 
-    appendLog(
-      createTealiumEvent({
-        tealium_event: 'picker_email_submit',
-        prop_id: propId,
-        email: $form.find('input[type=email]').val()?.toString(),
-        question: getQuestionFromElement($form),
-      }),
-    );
+    emit('picker_email_submit', {
+      prop_id: propId,
+      email: $form.find('input[type=email]').val()?.toString(),
+      question: getQuestionFromElement($form),
+    });
   });
 }

@@ -1,83 +1,145 @@
-import express from 'express';
-import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { Elysia } from 'elysia';
-import { staticPlugin } from '@elysiajs/static';
-import { TealiumClient } from './tealium/client';
 import { parseConfig } from './config';
+import DataLoader from 'dataloader';
 
 const config = parseConfig(process.env);
-const tealium = new TealiumClient(config.tealium);
+
 const app = new Elysia();
 
-const browser = await puppeteer.launch({
-  headless: 'new',
-  executablePath: config.puppeteer.path,
-  args: ['--no-sandbox'],
+const fileHandler = (fileName: string, cached = false) => {
+  const load = () => {
+    return Bun.file(import.meta.dir + '/public/' + fileName);
+  };
+
+  if (cached) {
+    const cache = load();
+    return () => cache;
+  }
+
+  return load;
+};
+
+const ts = new Bun.Transpiler({
+  loader: 'ts',
+  target: 'browser',
 });
 
-app.get('/', () => {
-  return Bun.file(import.meta.dir + '/public/index.html');
+const tsHandler = (fileName: string, cached = false) => {
+  const load = async () => {
+    const data = await Bun.file(import.meta.dir + '/public/' + fileName).text();
+    const js = ts.transformSync(data);
+
+    return new Response(js, {
+      headers: {
+        'Content-Type': 'text/javascript',
+      },
+    });
+  };
+
+  if (cached) {
+    const cache = load();
+    return () => cache;
+  }
+
+  return load;
+};
+
+const pageLoader = new DataLoader(async (urls: string[]) => {
+  return Promise.all(
+    urls.map(async (url) => {
+      setTimeout(() => pageLoader.clear(url), config.cache.pages.ttl);
+
+      const cachedUrl = `https://webcache.googleusercontent.com/search?q=cache:${url}`;
+
+      return fetch(cachedUrl, {
+        headers: {
+          // Mimic browser
+          Host: 'webcache.googleusercontent.com',
+          'User-Agent':
+            'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          Referer:
+            'https://webcache.googleusercontent.com/search?q=cache:https://fanpower.io',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+      }).then((r) => r.text());
+    }),
+  );
 });
 
-app.get('/styles.css', async () => {
-  return Bun.file(import.meta.dir + '/public/styles.css');
-});
+app.get('/', fileHandler('index.html', config.cache.files));
+app.get('/styles.css', fileHandler('styles.css', config.cache.files));
+app.get('/console.js', tsHandler('console.ts', config.cache.files));
+app.get('/intercept.js', tsHandler('intercept.ts', config.cache.files));
 
-app.get('/client.js', async () => {
-  const file = Bun.file(import.meta.dir + '/public/client.ts');
-  return new Bun.Transpiler({
-    loader: 'ts',
-    target: 'browser',
-  }).transform(await file.arrayBuffer());
-});
-
-app.get('/test', async (req) => {
-  const page = await browser.newPage();
-  const response = await page.goto(req.query.url as string);
-  const html = await response.text();
+app.get('/proxy', async (req) => {
+  const { url } = req.query;
+  const html = await pageLoader.load(url);
   const $ = cheerio.load(html);
-  const $head = $('head');
   const $body = $('body');
 
-  const $console = $(`
-    <div class="fp-tealium-console">
-      <h1>FanPower:Tealium Console</h1>
-      <menu>
-        <li><button class="fp-tealium-clear-cookies">Clear Cookies</button></li>
-      </menu>
-      <ul class="fp-tealium-events"></ul>
-    </div>
-  `);
+  // Remove base tag
+  $('base').remove();
 
-  const $content = $('<div class="fp-tealium-content" />');
-  const $container = $('<div class="fp-tealium-container" />');
+  // Remove google cache banner
+  $body.find('> *:first').remove();
 
-  $head.append(`<link rel="stylesheet" href="/styles.css" />`);
-  $body.append($container.append($content.append($body.children()), $console));
+  // Make URLs absolute
+  $('[href]').each((i, el) => {
+    const $el = $(el);
 
+    const absoluteUrl = new URL(
+      $el.attr('href') as string,
+      url.replace(/^\/\//, 'https://'),
+    );
+
+    $el.attr('href', absoluteUrl.toString());
+  });
+
+  $('[src]').each((i, el) => {
+    const $el = $(el);
+    const absoluteUrl = new URL($el.attr('src') as string, url);
+    $el.attr('src', absoluteUrl.toString());
+  });
+
+  // Add our styles and scripts
   $body.append(`
-    <script
-      src="https://code.jquery.com/jquery-3.7.1.slim.min.js"
-      integrity="sha256-kmHvs0B+OpCW5GVHUNjv9rOmY0IvSIRcf7zGUDTDQM8="
-      crossorigin="anonymous"
-    />
+    <script src="https://code.jquery.com/jquery-3.7.1.slim.min.js"></script>
+    <script src="/intercept.js"></script>
   `);
 
-  $body.append(`<script src="/client.js" />`);
+  const modHtml = $.html();
 
-  return new Response($.html(), {
+  return new Response(modHtml, {
     headers: {
-      'Content-Type': 'text/html',
+      'Content-Type': 'text/html; charset=utf-8',
     },
   });
-});
-
-process.on('SIGINT', async () => {
-  await browser.close();
-  process.exit(1);
 });
 
 app.listen(config.server.port, ({ hostname, port }) => {
   console.log(`Listening at http://${hostname}:${port}`);
 });
+
+// [
+//   'SIGHUP',
+//   'SIGINT',
+//   'SIGQUIT',
+//   'SIGILL',
+//   'SIGTRAP',
+//   'SIGABRT',
+//   'SIGBUS',
+//   'SIGFPE',
+//   'SIGUSR1',
+//   'SIGSEGV',
+//   'SIGUSR2',
+//   'SIGTERM',
+// ].forEach((sig) => {
+//   process.on(sig, () => {
+//     browser.close();
+//     app.stop();
+//   });
+// });

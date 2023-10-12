@@ -1,35 +1,65 @@
 <html>
   <head>
-    <title>Tealium Test</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        -webkit-font-smoothing: antialiased;
-      }
-
-      input,
-      button {
-        font-size: inherit;
-        border-radius: 0.25rem;
-        border: 1px solid #ccc;
-        padding: 0.5rem;
-      }
-
-      label {
-        display: block;
-        margin-bottom: 0.25rem;
-      }
-    </style>
+    <title>Data Integration Tester</title>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <form action="test" method="GET">
-      <input
-        style="width: 500px"
-        type="url"
-        name="url"
-        placeholder="URL of FanPowered page"
-      />
-      <button type="submit">Submit</button>
-    </form>
+  <form class="url-form" method="GET">
+    <h1><a href="/">Event Emulator</a></h1>
+    <select>
+      <option value="tealium">Tealium</option>
+    </select>
+    <input
+      type="url"
+      name="url"
+      placeholder="Enter a URL that contains a FanPower widget"
+      required
+    />
+    <div class="badge">Connector Installed</div>
+    <button type="submit">Load Page</button>
+    <button class="btn-clear-cookies">Clear Cookies</button>
+  </form>
+  <body class="index-page">
+    <div class="frames">
+      <div class="content">
+        <iframe name="content"></iframe>
+      </div>
+      <div class="console">
+        <ul class="data-events"></ul>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.slim.min.js"></script>
+    <script src="/console.js"></script>
+
+    <script>
+      {
+        mountConsole({
+          root: '.data-events',
+        });
+
+        const url =
+          new URLSearchParams(window.location.search).get('url') || '';
+
+        if (url) {
+          $('input[name="url"]').val(url);
+          $('iframe[name="content"]').attr('src', `/proxy?url=${url}`);
+        }
+
+        $('.btn-clear-cookies').on('click', () => {
+          deleteAllCookies();
+          location.reload();
+        });
+
+        const deleteAllCookies = () => {
+          var c = document.cookie.split('; ');
+
+          for (let i = 0; i < c.length; i++) {
+            document.cookie =
+              /^[^=]+/.exec(c[i])[0] +
+              '=;expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          }
+        };
+      }
+    </script>
   </body>
 </html>
