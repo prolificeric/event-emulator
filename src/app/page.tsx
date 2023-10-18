@@ -17,10 +17,27 @@ const fixUrl = (url: string): string => {
 
 export default function Home() {
   const params = useSearchParams();
-  const url = params.get('url') || '';
-  const cleanedUrl = url && fixUrl(url);
+  const [url, setUrl] = useState(params.get('url') || '');
+  const [submittedUrl, setSubmittedUrl] = useState(url);
+
   const [events, setEvents] = useState([]);
-  const [currentAdapter, setCurrentAdapter] = useState<Adapter>(adapters[0]);
+
+  const [currentAdapter, setCurrentAdapter] = useState<Adapter>(
+    adapters.find((a) => a.key === params.get('platform')) || adapters[0],
+  );
+
+  useEffect(() => {
+    history.pushState(
+      {},
+      '',
+      location.pathname +
+        '?' +
+        new URLSearchParams({
+          url: fixUrl(submittedUrl),
+          platform: currentAdapter.key,
+        }).toString(),
+    );
+  }, [submittedUrl, currentAdapter]);
 
   useEffect(() => {
     const handler: EventHandler<any> = (event) => {
@@ -57,17 +74,27 @@ export default function Home() {
 
   return (
     <main className="flex flex-col h-[100vh]">
-      <form className="flex gap-2 p-4 items-center bg-gray-800" method="GET">
+      <form
+        className="flex gap-2 p-4 items-center bg-gray-800"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const fixedUrl = fixUrl(url);
+          setSubmittedUrl(fixedUrl);
+          setUrl(fixedUrl);
+        }}
+      >
         <h1 className="font-medium">
           <a href="/">Data Event Emulator</a>
         </h1>
 
         <select
           className="text-black py-1 px-2 rounded-lg text-sm"
+          value={currentAdapter.key}
           onChange={(event) => {
             const adapter = adapters.find(
               (adapter) => adapter.key === event.target.value,
             );
+
             if (adapter) {
               setCurrentAdapter(adapter);
             }
@@ -82,11 +109,12 @@ export default function Home() {
 
         <div className="relative flex-1">
           <input
-            type="url"
+            type="text"
             name="url"
             placeholder="Enter a page containing a FanPower widget"
             className="text-sm px-4 py-1 rounded-full border w-full text-black"
-            defaultValue={url}
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
           />
 
           {url && (
@@ -116,7 +144,7 @@ export default function Home() {
 
       <div className="flex items-stretch h-[calc(100vh-62px)]">
         <iframe
-          src={'/proxy?url=' + encodeURIComponent(url)}
+          src={'/proxy?url=' + encodeURIComponent(submittedUrl)}
           className="flex-1 bg-white"
         />
         <div className="overflow-auto w-[25%] max-w-[600px] min-w-[350px] bg-gray-900 p-4">
@@ -157,6 +185,66 @@ const adapters: Adapter[] = [
         id,
         email,
         ...rest,
+      };
+    },
+  },
+  {
+    key: 'klaviyo',
+    name: 'Klaviyo',
+    convert({
+      event_type,
+      trace_id,
+      id,
+      email,
+      phone_code,
+      phone_number,
+      created_at,
+      username,
+      first_name,
+      last_name,
+      hometown,
+      birthday,
+      last_known_city,
+      last_known_state,
+      ...rest
+    }) {
+      const now = new Date();
+      const dateStr = now.toJSON();
+
+      return {
+        type: 'event',
+        attributes: {
+          time: dateStr,
+          value: 1,
+          metric: {
+            data: {
+              type: 'metric',
+              attributes: {
+                event_type,
+                ...rest,
+              },
+            },
+          },
+          profile: {
+            data: {
+              type: 'profile',
+              id: id,
+              attributes: {
+                email,
+                phone_code,
+                phone_number,
+                created_at,
+                username,
+                first_name,
+                last_name,
+                hometown,
+                birthday,
+                last_known_city,
+                last_known_state,
+              },
+            },
+          },
+        },
       };
     },
   },
