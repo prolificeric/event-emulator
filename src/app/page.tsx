@@ -148,14 +148,20 @@ export default function Home() {
           className="flex-1 bg-white"
         />
         <div className="overflow-auto w-[25%] max-w-[600px] min-w-[350px] bg-gray-900 p-4">
-          {events.map((event, index) => (
-            <pre
-              key={index}
-              className="block rounded-lg text-xs p-2 text-gray-200 bg-gray-700 overflow-x-auto mb-4"
-            >
-              {JSON.stringify(currentAdapter.convert(event), null, 2)}
-            </pre>
-          ))}
+          {events.map((event, index) => {
+            const convertedEvent = currentAdapter.convert(event);
+
+            return (
+              <pre
+                key={index}
+                className="block rounded-lg text-xs p-2 text-gray-200 bg-gray-700 overflow-x-auto mb-4"
+              >
+                {typeof convertedEvent !== 'object'
+                  ? convertedEvent
+                  : JSON.stringify(currentAdapter.convert(event), null, 2)}
+              </pre>
+            );
+          })}
         </div>
       </div>
     </main>
@@ -186,6 +192,29 @@ const adapters: Adapter[] = [
         email,
         ...rest,
       };
+    },
+  },
+  {
+    key: 'snowflake',
+    name: 'Snowflake',
+    convert(event) {
+      const keyStr = Object.keys(event)
+        .map((key) => `'${key}'`)
+        .join(', ');
+
+      const valueStr = Object.keys(event)
+        .map((key) => {
+          const v = event[key];
+
+          if ([null, undefined].includes(v)) {
+            return 'NULL';
+          }
+
+          return `'${v}'`;
+        })
+        .join(',\n  ');
+
+      return `INSERT INTO PC_fanpower_DB (${keyStr}) VALUES (\n  ${valueStr}\n)`;
     },
   },
   {
